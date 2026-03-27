@@ -648,76 +648,78 @@ export default function HandColorCatchGame() {
             )}
           </div>
 
-          {/* Ranking Sidebar OR Game Over Final View */}
-          <aside className={`flex flex-col rounded-[32px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl shadow-2xl transition-all duration-700 ${gameState === 'GAME_OVER' ? 'mx-auto mt-6 w-full max-w-2xl px-12 py-16 border-cyan-400/20 bg-[#0c1220]/80' : ''}`}>
-
-            {gameState === 'GAME_OVER' && (
+          {gameState === 'GAME_OVER' && (
+            <aside className="mx-auto mt-6 flex w-full max-w-2xl flex-col rounded-[32px] border border-cyan-400/20 bg-[#0c1220]/80 px-12 py-16 backdrop-blur-xl shadow-2xl transition-all duration-700">
               <div className="mb-12 text-center">
                 <h2 className="mb-4 text-7xl font-black italic tracking-tighter text-[#ff4db8] drop-shadow-[0_0_40px_rgba(255,77,184,0.5)]">
                   GAME OVER
                 </h2>
                 <div className="inline-flex items-center gap-3 rounded-full border border-cyan-400/30 bg-cyan-900/30 px-6 py-3 shadow-[0_0_20px_rgba(46,214,255,0.15)]">
-                  <span className="text-xl font-medium text-white/90">{playerName} 님의 최종 점수:</span>
+                  <span className="text-xl font-medium text-white/90">{playerNameRef.current} 님의 최종 점수:</span>
                   <span className="text-3xl font-extrabold text-cyan-300">{scoreRef.current}</span>
                 </div>
               </div>
-            )}
 
-            <div className="mb-5 flex flex-col">
-              <h2 className={`${gameState === 'GAME_OVER' ? 'text-3xl text-center' : 'text-xl'} font-extrabold tracking-tight text-white`}>
-                Score Ranking
-              </h2>
-              <p className={`mt-1 text-white/50 ${gameState === 'GAME_OVER' ? 'text-base text-center' : 'text-xs font-medium'}`}>
-                최상위 유저 기록 점수
-              </p>
-            </div>
+              <div className="mb-5 flex flex-col">
+                <h2 className="text-center text-3xl font-extrabold tracking-tight text-white">
+                  Score Ranking
+                </h2>
+                <p className="mt-1 text-center text-base text-white/50">
+                  최상위 유저 기록 점수
+                </p>
+              </div>
 
-            {/* Ranking List Wrapper */}
-            <div className={`flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-white/20 ${gameState === 'GAME_OVER' ? 'max-h-[320px]' : ''}`}>
-              {ranking.length === 0 ? (
-                <div className="flex h-32 items-center justify-center rounded-2xl border border-white/5 bg-black/20 text-sm font-medium text-white/30">
-                  아직 기록이 없습니다.
-                </div>
-              ) : (
-                ranking.map((item, index) => {
-                  const isLatestScore = gameState === 'GAME_OVER' && index === 0 && item.score === scoreRef.current && item.name === playerName.trim();
+              <div className="max-h-[320px] flex-1 space-y-3 overflow-y-auto pr-2 scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-white/20">
+                {ranking.length === 0 ? (
+                  <div className="flex h-32 items-center justify-center rounded-2xl border border-white/5 bg-black/20 text-sm font-medium text-white/30">
+                    아직 기록이 없습니다.
+                  </div>
+                ) : (
+                  ranking.map((item, index) => {
+                    const isLatestScore =
+                      index === 0 &&
+                      item.score === scoreRef.current &&
+                      item.name === playerNameRef.current.trim();
 
-                  return (
-                    <div
-                      key={`${item.name}-${item.score}-${item.date}-${index}`}
-                      className={`flex items-center justify-between rounded-2xl border px-5 py-4 transition-all duration-300 ${isLatestScore
-                        ? 'border-cyan-400/40 bg-cyan-900/30 shadow-[0_0_20px_rgba(46,214,255,0.2)] scale-[1.02]'
-                        : 'border-white/5 bg-black/20 hover:border-white/10 hover:bg-black/30'
-                        }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`flex items-center justify-center rounded-full font-black ${index === 0 ? 'bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/50' :
-                          index === 1 ? 'bg-slate-300/20 text-slate-300 ring-1 ring-slate-400/30' :
-                            index === 2 ? 'bg-amber-700/20 text-amber-500 ring-1 ring-amber-700/50' :
-                              'bg-white/5 text-white/40 font-bold'
-                          } ${gameState === 'GAME_OVER' ? 'h-10 w-10 text-lg' : 'h-8 w-8 text-sm'}`}>
-                          {index + 1}
+                    return (
+                      <div
+                        key={`${item.name}-${item.score}-${item.date}-${index}`}
+                        className={`flex items-center justify-between rounded-2xl border px-5 py-4 transition-all duration-300 ${isLatestScore
+                          ? 'scale-[1.02] border-cyan-400/40 bg-cyan-900/30 shadow-[0_0_20px_rgba(46,214,255,0.2)]'
+                          : 'border-white/5 bg-black/20 hover:border-white/10 hover:bg-black/30'
+                          }`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div
+                            className={`flex h-10 w-10 items-center justify-center rounded-full text-lg font-black ${index === 0
+                              ? 'bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/50'
+                              : index === 1
+                                ? 'bg-slate-300/20 text-slate-300 ring-1 ring-slate-400/30'
+                                : index === 2
+                                  ? 'bg-amber-700/20 text-amber-500 ring-1 ring-amber-700/50'
+                                  : 'bg-white/5 font-bold text-white/40'
+                              }`}
+                          >
+                            {index + 1}
+                          </div>
+                          <div>
+                            <div className="text-xl font-bold text-white">{item.name}</div>
+                            <div className="mt-0.5 text-sm text-white/40">{item.date}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className={`font-bold text-white ${gameState === 'GAME_OVER' ? 'text-xl' : 'text-base'}`}>
-                            {item.name}
-                          </div>
-                          <div className={`text-white/40 ${gameState === 'GAME_OVER' ? 'text-sm mt-0.5' : 'text-xs'}`}>
-                            {item.date}
-                          </div>
+                        <div
+                          className={`text-4xl font-black tracking-tight text-cyan-400 ${isLatestScore ? 'drop-shadow-[0_0_10px_rgba(46,214,255,0.4)]' : ''
+                            }`}
+                        >
+                          {item.score}
                         </div>
                       </div>
-                      <div className={`font-black tracking-tight text-cyan-400 ${gameState === 'GAME_OVER' ? 'text-4xl' : 'text-2xl'} ${isLatestScore ? 'drop-shadow-[0_0_10px_rgba(46,214,255,0.4)]' : ''}`}>
-                        {item.score}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                    );
+                  })
+                )}
+              </div>
 
-            {gameState === 'GAME_OVER' && (
-              <div className="mt-12 pt-8 border-t border-white/10">
+              <div className="mt-12 border-t border-white/10 pt-8">
                 <button
                   onClick={restartGame}
                   className="w-full rounded-2xl bg-gradient-to-r from-[#ff4db8] to-[#ff2a85] px-4 py-5 text-xl font-bold text-white shadow-[0_0_30px_rgba(255,77,184,0.4)] transition-all hover:scale-[1.03] active:scale-[0.97]"
@@ -725,8 +727,8 @@ export default function HandColorCatchGame() {
                   새로운 게임 시작하기 (Restart)
                 </button>
               </div>
-            )}
-          </aside>
+            </aside>
+          )}
         </div>
       </div>
     </main>
