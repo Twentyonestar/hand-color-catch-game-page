@@ -94,10 +94,17 @@ export default function HandColorCatchGame() {
   const [misses, setMisses] = useState(0);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string>('');
-  const [gameOver, setGameOver] = useState(false);
-  const [playerName, setPlayerName] = useState('PLAYER');
+  
+  const gameStateRef = useRef<'INPUT' | 'PLAYING' | 'GAME_OVER'>('INPUT');
+  const [gameState, setGameState] = useState<'INPUT' | 'PLAYING' | 'GAME_OVER'>('INPUT');
+  
+  const changeGameState = (newState: 'INPUT' | 'PLAYING' | 'GAME_OVER') => {
+    gameStateRef.current = newState;
+    setGameState(newState);
+  };
+
+  const [playerName, setPlayerName] = useState('');
   const [ranking, setRanking] = useState<Array<{ name: string; score: number; date: string }>>([]);
-  const [savedScore, setSavedScore] = useState(false);
 
   useEffect(() => {
     try {
@@ -229,7 +236,7 @@ export default function HandColorCatchGame() {
     drawParticles(ctx);
     drawHands(ctx);
     drawHud(ctx, width);
-    if (gameOver) {
+    if (gameStateRef.current === 'GAME_OVER') {
       drawGameOver(ctx, width, height);
     }
   };
@@ -270,7 +277,7 @@ export default function HandColorCatchGame() {
   };
 
   const spawnBallsIfNeeded = (width: number, nowMs: number) => {
-    if (gameOver) return;
+    if (gameStateRef.current !== 'PLAYING') return;
     if (ballsRef.current.filter((ball) => ball.active).length >= MAX_BALLS) return;
     if (nowMs - lastSpawnTimeRef.current < SPAWN_INTERVAL_MS) return;
 
@@ -289,9 +296,11 @@ export default function HandColorCatchGame() {
         if (ball.y - ball.radius > height + 10) {
           missesRef.current += 1;
           setMisses(missesRef.current);
-          if (missesRef.current >= MAX_MISSES) {
-            setGameOver(true);
+          if (missesRef.current >= MAX_MISSES && gameStateRef.current === 'PLAYING') {
+            changeGameState('GAME_OVER');
             ballsRef.current = [];
+            // Auto-save the score
+            saveRanking(scoreRef.current);
           }
           return false;
         }
@@ -300,7 +309,7 @@ export default function HandColorCatchGame() {
   };
 
   const resolveCollisions = () => {
-    if (gameOver) return;
+    if (gameStateRef.current !== 'PLAYING') return;
     const hands = trackedHandsRef.current;
 
     ballsRef.current = ballsRef.current.filter((ball) => {
@@ -499,22 +508,22 @@ export default function HandColorCatchGame() {
 
     ctx.fillStyle = 'rgba(255,255,255,0.72)';
     ctx.font = '500 16px Inter, sans-serif';
-    ctx.fillText('오른쪽에서 이름 저장 후 Restart를 누르세요.', x + 76, y + 136);
+    ctx.fillText('우측 하단의 Restart 버튼을 누르세요.', x + 82, y + 136);
     ctx.restore();
   };
 
-  const saveRanking = () => {
-    const trimmedName = playerName.trim() || 'PLAYER';
-    const next = [
-      { name: trimmedName.slice(0, 12), score: scoreRef.current, date: new Date().toLocaleDateString() },
-      ...ranking,
-    ]
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 10);
-
-    setRanking(next);
-    setSavedScore(true);
-    localStorage.setItem(RANKING_STORAGE_KEY, JSON.stringify(next));
+  const saveRanking = (finalScore: number) => {
+    setRanking((prev) => {
+      const trimmedName = playerName.trim() || 'PLAYER';
+      const next = [
+        { name: trimmedName.slice(0, 12), score: finalScore, date: new Date().toLocaleDateString() },
+        ...prev,
+      ]
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10);
+      localStorage.setItem(RANKING_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
   };
 
   const restartGame = () => {
@@ -526,8 +535,12 @@ export default function HandColorCatchGame() {
     lastSpawnTimeRef.current = 0;
     setScore(0);
     setMisses(0);
-    setGameOver(false);
-    setSavedScore(false);
+    changeGameState('INPUT');
+  };
+
+  const startGame = () => {
+    if (!playerName.trim()) return;
+    changeGameState('PLAYING');
   };
 
   return (
@@ -572,52 +585,47 @@ export default function HandColorCatchGame() {
             )}
 
             {error && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/70 px-6 text-center backdrop-blur-sm">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/70 px-6 text-center backdrop-blur-sm z-50">
                 <div className="max-w-md rounded-2xl border border-red-400/30 bg-red-500/10 px-5 py-4 text-sm text-red-100">
                   {error}
                 </div>
               </div>
             )}
+
+            {gameState === 'INPUT' && !error && ready && (
+              <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+                <div className="w-[360px] rounded-3xl border border-white/10 bg-[#0c1220] p-6 shadow-2xl">
+                  <h3 className="mb-2 text-xl font-bold text-center text-white">플레이어 이름 입력</h3>
+                  <p className="mb-6 text-sm text-center text-white/50">게임에 참여할 이름을 적어주세요.</p>
+                  
+                  <input
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value)}
+                    maxLength={12}
+                    className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-center text-lg font-medium text-white outline-none ring-0 focus:border-cyan-400/50"
+                    placeholder="이름 입력"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') startGame();
+                    }}
+                  />
+                  
+                  <button
+                    onClick={startGame}
+                    disabled={!playerName.trim()}
+                    className="mt-4 w-full rounded-2xl bg-cyan-500 px-4 py-3 text-base font-bold text-black disabled:opacity-50 disabled:cursor-not-allowed hover:bg-cyan-400 transition-colors"
+                  >
+                    게임 시작
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
-          <aside className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+          <aside className="flex flex-col rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
             <h2 className="text-lg font-bold">Ranking</h2>
-            <p className="mt-1 text-sm text-white/60">상위 10개 점수를 브라우저에 저장합니다.</p>
+            <p className="mt-1 text-sm text-white/60">모든 플레이어의 최근 점수 랭킹입니다.</p>
 
-            <div className="mt-4 space-y-3">
-              <label className="block text-sm text-white/70">플레이어 이름</label>
-              <input
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                maxLength={12}
-                className="w-full rounded-2xl border border-white/10 bg-[#0c1220] px-4 py-3 text-sm outline-none ring-0 placeholder:text-white/30"
-                placeholder="이름 입력"
-              />
-
-              <div className="flex gap-2">
-                <button
-                  onClick={saveRanking}
-                  disabled={!gameOver || savedScore}
-                  className="flex-1 rounded-2xl bg-[#ff4db8] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  점수 저장
-                </button>
-                <button
-                  onClick={restartGame}
-                  className="flex-1 rounded-2xl bg-[#1c2740] px-4 py-3 text-sm font-semibold text-white"
-                >
-                  Restart
-                </button>
-              </div>
-
-              {savedScore && (
-                <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
-                  현재 점수가 랭킹에 저장되었습니다.
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6 space-y-3">
+            <div className="mt-4 flex-1 overflow-y-auto pr-2 space-y-3">
               {ranking.length === 0 ? (
                 <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-5 text-sm text-white/45">
                   아직 저장된 랭킹이 없습니다.
@@ -639,6 +647,17 @@ export default function HandColorCatchGame() {
                 ))
               )}
             </div>
+
+            {gameState === 'GAME_OVER' && (
+              <div className="mt-6 pt-5 border-t border-white/10">
+                <button
+                  onClick={restartGame}
+                  className="w-full rounded-2xl bg-[#ff4db8] px-4 py-4 text-base font-bold text-white shadow-[0_0_16px_rgba(255,77,184,0.4)] transition-transform hover:scale-105"
+                >
+                  다시하기 (Restart)
+                </button>
+              </div>
+            )}
           </aside>
         </div>
       </div>
