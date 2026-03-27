@@ -23,7 +23,6 @@ type TrackedHand = {
   fingertip: { x: number; y: number };
 };
 
-
 const HAND_CONNECTIONS: Array<[number, number]> = [
   [0, 1], [1, 2], [2, 3], [3, 4],
   [0, 5], [5, 6], [6, 7], [7, 8],
@@ -38,7 +37,6 @@ const ROLE_COLORS: Record<HandRole, string> = {
   blue: '#32c8ff',
 };
 
-const BG_GRADIENT = ['#0b1020', '#10182f', '#182341'];
 const MAX_BALLS = 8;
 const SPAWN_INTERVAL_MS = 900;
 const SCORE_PER_CATCH = 10;
@@ -57,6 +55,7 @@ function distance(ax: number, ay: number, bx: number, by: number) {
 function makeBall(id: number, width: number): FallingBall {
   const role: HandRole = Math.random() > 0.5 ? 'pink' : 'blue';
   const margin = 60;
+
   return {
     id,
     x: margin + Math.random() * Math.max(1, width - margin * 2),
@@ -69,10 +68,6 @@ function makeBall(id: number, width: number): FallingBall {
 }
 
 function getRoleFromHandedness(label: string | undefined): HandRole {
-  // Webcam preview is usually mirrored, so MediaPipe's handedness can feel inverted on screen.
-  // This mapping keeps the gameplay visually intuitive in a mirrored selfie view:
-  // screen-left hand => one color, screen-right hand => another color.
-  // If you want strict anatomical mapping later, swap this function.
   if (label === 'Left') return 'pink';
   return 'blue';
 }
@@ -85,27 +80,34 @@ export default function HandColorCatchGame() {
   const lastVideoTimeRef = useRef(-1);
   const trackedHandsRef = useRef<TrackedHand[]>([]);
   const ballsRef = useRef<FallingBall[]>([]);
-  const particlesRef = useRef<{ x: number; y: number; vx: number; vy: number; life: number; color: string }[]>([]);
+  const particlesRef = useRef<
+    { x: number; y: number; vx: number; vy: number; life: number; color: string }[]
+  >([]);
   const ballIdRef = useRef(0);
   const lastSpawnTimeRef = useRef(0);
   const scoreRef = useRef(0);
   const missesRef = useRef(0);
+  const playerNameRef = useRef('');
 
   const [score, setScore] = useState(0);
   const [misses, setMisses] = useState(0);
   const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState('');
 
   const gameStateRef = useRef<'INPUT' | 'PLAYING' | 'GAME_OVER'>('INPUT');
   const [gameState, setGameState] = useState<'INPUT' | 'PLAYING' | 'GAME_OVER'>('INPUT');
+
+  const [playerName, setPlayerName] = useState('');
+  const [ranking, setRanking] = useState<Array<{ name: string; score: number; date: string }>>([]);
 
   const changeGameState = (newState: 'INPUT' | 'PLAYING' | 'GAME_OVER') => {
     gameStateRef.current = newState;
     setGameState(newState);
   };
 
-  const [playerName, setPlayerName] = useState('');
-  const [ranking, setRanking] = useState<Array<{ name: string; score: number; date: string }>>([]);
+  useEffect(() => {
+    playerNameRef.current = playerName;
+  }, [playerName]);
 
   useEffect(() => {
     try {
@@ -165,6 +167,7 @@ export default function HandColorCatchGame() {
         });
 
         handLandmarkerRef.current = handLandmarker;
+
         if (!mounted) return;
         setReady(true);
         startLoop();
@@ -187,9 +190,7 @@ export default function HandColorCatchGame() {
     return () => {
       mounted = false;
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
+      if (stream) stream.getTracks().forEach((track) => track.stop());
       handLandmarkerRef.current?.close();
       handLandmarkerRef.current = null;
     };
@@ -212,7 +213,6 @@ export default function HandColorCatchGame() {
 
     ctx.clearRect(0, 0, width, height);
 
-    // Webcam image (mirrored for selfie-like interaction)
     ctx.save();
     ctx.translate(width, 0);
     ctx.scale(-1, 1);
@@ -237,6 +237,7 @@ export default function HandColorCatchGame() {
     drawParticles(ctx);
     drawHands(ctx);
     drawHud(ctx, width);
+
     if (gameStateRef.current === 'GAME_OVER') {
       drawGameOver(ctx, width, height);
     }
@@ -294,23 +295,26 @@ export default function HandColorCatchGame() {
       })
       .filter((ball) => {
         if (!ball.active) return false;
+
         if (ball.y - ball.radius > height + 10) {
           missesRef.current += 1;
           setMisses(missesRef.current);
+
           if (missesRef.current >= MAX_MISSES && gameStateRef.current === 'PLAYING') {
             changeGameState('GAME_OVER');
             ballsRef.current = [];
-            // Auto-save the score
             saveRanking(scoreRef.current);
           }
           return false;
         }
+
         return true;
       });
   };
 
   const resolveCollisions = () => {
     if (gameStateRef.current !== 'PLAYING') return;
+
     const hands = trackedHandsRef.current;
 
     ballsRef.current = ballsRef.current.filter((ball) => {
@@ -327,7 +331,6 @@ export default function HandColorCatchGame() {
         scoreRef.current += SCORE_PER_CATCH;
         setScore(scoreRef.current);
 
-        // spawn particles effect
         for (let i = 0; i < 12; i++) {
           const angle = Math.random() * Math.PI * 2;
           const speed = 2 + Math.random() * 3;
@@ -392,7 +395,6 @@ export default function HandColorCatchGame() {
         ctx.fill();
       });
 
-      // Index fingertip-only hit area.
       ctx.beginPath();
       ctx.arc(hand.fingertip.x, hand.fingertip.y, HIT_RADIUS, 0, Math.PI * 2);
       ctx.strokeStyle = `${color}66`;
@@ -442,11 +444,6 @@ export default function HandColorCatchGame() {
     });
   };
 
-  const playerNameRef = useRef('');
-  useEffect(() => {
-    playerNameRef.current = playerName;
-  }, [playerName]);
-
   const drawHud = (ctx: CanvasRenderingContext2D, width: number) => {
     const hudWidth = 360;
     const hudHeight = 70;
@@ -468,6 +465,7 @@ export default function HandColorCatchGame() {
     ctx.fillStyle = '#ffffff';
     ctx.font = '700 18px Inter, sans-serif';
     ctx.fillText('SCORE', x + 34, y + 28);
+
     ctx.fillStyle = '#7ff0ff';
     ctx.font = '800 34px Inter, sans-serif';
     ctx.fillText(String(scoreRef.current).padStart(3, '0'), x + 110, y + 40);
@@ -481,6 +479,7 @@ export default function HandColorCatchGame() {
     ctx.fillStyle = '#ffffff';
     ctx.font = '700 18px Inter, sans-serif';
     ctx.fillText('MISS', x + 236, y + 28);
+
     ctx.fillStyle = missesRef.current >= MAX_MISSES ? '#ff4d6d' : '#ff8fa8';
     ctx.font = '800 28px Inter, sans-serif';
     ctx.fillText(`${missesRef.current}/${MAX_MISSES}`, x + 280, y + 55);
@@ -514,7 +513,7 @@ export default function HandColorCatchGame() {
 
     ctx.fillStyle = 'rgba(255,255,255,0.72)';
     ctx.font = '500 16px Inter, sans-serif';
-    ctx.fillText('우측 하단의 Restart 버튼을 누르세요.', x + 82, y + 136);
+    ctx.fillText('아래 랭킹과 Restart 버튼을 확인하세요.', x + 70, y + 136);
     ctx.restore();
   };
 
@@ -522,7 +521,11 @@ export default function HandColorCatchGame() {
     setRanking((prev) => {
       const trimmedName = playerNameRef.current.trim() || 'PLAYER';
       const next = [
-        { name: trimmedName.slice(0, 12), score: finalScore, date: new Date().toLocaleDateString() },
+        {
+          name: trimmedName.slice(0, 12),
+          score: finalScore,
+          date: new Date().toLocaleDateString(),
+        },
         ...prev,
       ]
         .sort((a, b) => b.score - a.score)
@@ -552,18 +555,18 @@ export default function HandColorCatchGame() {
 
   return (
     <main className="min-h-screen bg-[#060b16] font-sans text-white selection:bg-[#ff4db8]/30">
-
-      {/* 1. INPUT Screen */}
       {gameState === 'INPUT' && (
-        <div className="flex min-h-screen flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-[#060b16] to-[#060b16]">
+        <div className="flex min-h-screen flex-col items-center justify-center bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-[#060b16] to-[#060b16] p-6">
           <div className="w-full max-w-sm rounded-[32px] border border-white/10 bg-[#0c1220] p-10 shadow-[0_0_60px_-15px_rgba(46,214,255,0.3)] backdrop-blur-xl transition-all duration-700 hover:border-cyan-400/30">
             <div className="mb-2 flex justify-center">
-              <span className="inline-block h-3 w-3 rounded-full bg-[#ff4db8] shadow-[0_0_10px_#ff4db8] mt-2 mr-3" />
-              <span className="inline-block h-3 w-3 rounded-full bg-cyan-400 shadow-[0_0_10px_#2ed6ff] mt-2 mr-3" />
+              <span className="mt-2 mr-3 inline-block h-3 w-3 rounded-full bg-[#ff4db8] shadow-[0_0_10px_#ff4db8]" />
+              <span className="mt-2 mr-3 inline-block h-3 w-3 rounded-full bg-cyan-400 shadow-[0_0_10px_#2ed6ff]" />
             </div>
-            <h1 className="mb-3 text-center text-4xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-[#ff4db8] to-[#32c8ff]">
+
+            <h1 className="mb-3 bg-gradient-to-r from-[#ff4db8] to-[#32c8ff] bg-clip-text text-center text-4xl font-extrabold tracking-tight text-transparent">
               Color Catch
             </h1>
+
             <p className="mb-8 text-center text-sm font-medium text-white/50">
               게임에 쓸 닉네임을 적고 시작하세요.
             </p>
@@ -590,10 +593,7 @@ export default function HandColorCatchGame() {
         </div>
       )}
 
-      {/* 2. PLAYING or GAME_OVER UI wrapper */}
-      <div className={`mx-auto max-w-6xl px-6 py-8 ${gameState === 'INPUT' ? 'hidden' : 'block'}`}>
-
-        {/* Header - hide on game over */}
+      <div className={`mx-auto w-full max-w-[1400px] px-6 py-8 ${gameState === 'INPUT' ? 'hidden' : 'block'}`}>
         <div className={`mb-5 ${gameState === 'GAME_OVER' ? 'hidden' : 'block'}`}>
           <h1 className="text-2xl font-bold tracking-tight">Hand Color Catch Game</h1>
           <p className="mt-2 text-sm text-white/70">
@@ -601,7 +601,6 @@ export default function HandColorCatchGame() {
           </p>
         </div>
 
-        {/* Legend - hide on game over */}
         <div className={`mb-4 flex flex-wrap gap-3 pointer-events-none ${gameState === 'GAME_OVER' ? 'hidden' : 'flex'}`}>
           {legend.map((item) => (
             <div
@@ -615,121 +614,124 @@ export default function HandColorCatchGame() {
               {item.label}
             </div>
           ))}
+
           <div className="rounded-full border border-red-400/20 bg-red-400/10 px-4 py-2 text-sm text-red-100 backdrop-blur">
             게임 종료: MISS {MAX_MISSES}회 초과 시
           </div>
         </div>
 
-        {/* Layout Grid container */}
-        <div className={`grid gap-6 ${gameState === 'GAME_OVER' ? 'block' : 'lg:grid-cols-[minmax(0,1fr)_320px]'}`}>
+        {gameState !== 'GAME_OVER' && (
+          <div className="w-full">
+            <div className="relative mx-auto aspect-[16/9] w-full max-w-[1400px] overflow-hidden rounded-[28px] border border-cyan-400/25 bg-black shadow-[0_0_40px_rgba(46,214,255,0.12)]">
+              <video ref={videoRef} className="hidden" playsInline muted />
+              <canvas ref={canvasRef} className="block h-full w-full object-cover" />
 
-          {/* Main Camera Canvas */}
-          <div className={`relative overflow-hidden rounded-[28px] border border-cyan-400/25 bg-black shadow-[0_0_40px_rgba(46,214,255,0.12)] ${gameState === 'GAME_OVER' ? 'hidden' : 'block'}`}>
-            <video ref={videoRef} className="hidden" playsInline muted />
-            <canvas ref={canvasRef} className="block h-auto w-full object-cover" />
-
-            {!ready && !error && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md">
-                <div className="flex flex-col items-center">
-                  <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/10 border-t-cyan-400 mb-4"></div>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium text-white/80 shadow-2xl">
-                    웹캠을 켜고 손 인식 모델을 로드하는 중...
+              {!ready && !error && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md">
+                  <div className="flex flex-col items-center">
+                    <div className="mb-4 h-10 w-10 animate-spin rounded-full border-4 border-white/10 border-t-cyan-400" />
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium text-white/80 shadow-2xl">
+                      웹캠을 켜고 손 인식 모델을 로드하는 중...
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {error && (
-              <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 px-6 text-center backdrop-blur-md">
-                <div className="max-w-md rounded-2xl border border-red-500/30 bg-red-500/10 px-6 py-5 text-sm font-medium text-red-200 shadow-2xl">
-                  {error}
+              {error && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 px-6 text-center backdrop-blur-md">
+                  <div className="max-w-md rounded-2xl border border-red-500/30 bg-red-500/10 px-6 py-5 text-sm font-medium text-red-200 shadow-2xl">
+                    {error}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
+        )}
 
-          {gameState === 'GAME_OVER' && (
-            <aside className="mx-auto mt-6 flex w-full max-w-2xl flex-col rounded-[32px] border border-cyan-400/20 bg-[#0c1220]/80 px-12 py-16 backdrop-blur-xl shadow-2xl transition-all duration-700">
-              <div className="mb-12 text-center">
-                <h2 className="mb-4 text-7xl font-black italic tracking-tighter text-[#ff4db8] drop-shadow-[0_0_40px_rgba(255,77,184,0.5)]">
-                  GAME OVER
-                </h2>
-                <div className="inline-flex items-center gap-3 rounded-full border border-cyan-400/30 bg-cyan-900/30 px-6 py-3 shadow-[0_0_20px_rgba(46,214,255,0.15)]">
-                  <span className="text-xl font-medium text-white/90">{playerNameRef.current} 님의 최종 점수:</span>
-                  <span className="text-3xl font-extrabold text-cyan-300">{scoreRef.current}</span>
+        {gameState === 'GAME_OVER' && (
+          <aside className="mx-auto mt-6 flex w-full max-w-2xl flex-col rounded-[32px] border border-cyan-400/20 bg-[#0c1220]/80 px-12 py-16 shadow-2xl backdrop-blur-xl transition-all duration-700">
+            <div className="mb-12 text-center">
+              <h2 className="mb-4 text-7xl font-black italic tracking-tighter text-[#ff4db8] drop-shadow-[0_0_40px_rgba(255,77,184,0.5)]">
+                GAME OVER
+              </h2>
+
+              <div className="inline-flex items-center gap-3 rounded-full border border-cyan-400/30 bg-cyan-900/30 px-6 py-3 shadow-[0_0_20px_rgba(46,214,255,0.15)]">
+                <span className="text-xl font-medium text-white/90">
+                  {playerNameRef.current} 님의 최종 점수:
+                </span>
+                <span className="text-3xl font-extrabold text-cyan-300">{scoreRef.current}</span>
+              </div>
+            </div>
+
+            <div className="mb-5 flex flex-col">
+              <h2 className="text-center text-3xl font-extrabold tracking-tight text-white">
+                Score Ranking
+              </h2>
+              <p className="mt-1 text-center text-base text-white/50">최상위 유저 기록 점수</p>
+            </div>
+
+            <div className="max-h-[320px] flex-1 space-y-3 overflow-y-auto pr-2 scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-white/20">
+              {ranking.length === 0 ? (
+                <div className="flex h-32 items-center justify-center rounded-2xl border border-white/5 bg-black/20 text-sm font-medium text-white/30">
+                  아직 기록이 없습니다.
                 </div>
-              </div>
+              ) : (
+                ranking.map((item, index) => {
+                  const isLatestScore =
+                    index === 0 &&
+                    item.score === scoreRef.current &&
+                    item.name === playerNameRef.current.trim();
 
-              <div className="mb-5 flex flex-col">
-                <h2 className="text-center text-3xl font-extrabold tracking-tight text-white">
-                  Score Ranking
-                </h2>
-                <p className="mt-1 text-center text-base text-white/50">
-                  최상위 유저 기록 점수
-                </p>
-              </div>
-
-              <div className="max-h-[320px] flex-1 space-y-3 overflow-y-auto pr-2 scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-white/20">
-                {ranking.length === 0 ? (
-                  <div className="flex h-32 items-center justify-center rounded-2xl border border-white/5 bg-black/20 text-sm font-medium text-white/30">
-                    아직 기록이 없습니다.
-                  </div>
-                ) : (
-                  ranking.map((item, index) => {
-                    const isLatestScore =
-                      index === 0 &&
-                      item.score === scoreRef.current &&
-                      item.name === playerNameRef.current.trim();
-
-                    return (
-                      <div
-                        key={`${item.name}-${item.score}-${item.date}-${index}`}
-                        className={`flex items-center justify-between rounded-2xl border px-5 py-4 transition-all duration-300 ${isLatestScore
+                  return (
+                    <div
+                      key={`${item.name}-${item.score}-${item.date}-${index}`}
+                      className={`flex items-center justify-between rounded-2xl border px-5 py-4 transition-all duration-300 ${isLatestScore
                           ? 'scale-[1.02] border-cyan-400/40 bg-cyan-900/30 shadow-[0_0_20px_rgba(46,214,255,0.2)]'
                           : 'border-white/5 bg-black/20 hover:border-white/10 hover:bg-black/30'
-                          }`}
-                      >
-                        <div className="flex items-center gap-4">
-                          <div
-                            className={`flex h-10 w-10 items-center justify-center rounded-full text-lg font-black ${index === 0
+                        }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={`flex h-10 w-10 items-center justify-center rounded-full text-lg font-black ${index === 0
                               ? 'bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/50'
                               : index === 1
                                 ? 'bg-slate-300/20 text-slate-300 ring-1 ring-slate-400/30'
                                 : index === 2
                                   ? 'bg-amber-700/20 text-amber-500 ring-1 ring-amber-700/50'
                                   : 'bg-white/5 font-bold text-white/40'
-                              }`}
-                          >
-                            {index + 1}
-                          </div>
-                          <div>
-                            <div className="text-xl font-bold text-white">{item.name}</div>
-                            <div className="mt-0.5 text-sm text-white/40">{item.date}</div>
-                          </div>
-                        </div>
-                        <div
-                          className={`text-4xl font-black tracking-tight text-cyan-400 ${isLatestScore ? 'drop-shadow-[0_0_10px_rgba(46,214,255,0.4)]' : ''
                             }`}
                         >
-                          {item.score}
+                          {index + 1}
+                        </div>
+
+                        <div>
+                          <div className="text-xl font-bold text-white">{item.name}</div>
+                          <div className="mt-0.5 text-sm text-white/40">{item.date}</div>
                         </div>
                       </div>
-                    );
-                  })
-                )}
-              </div>
 
-              <div className="mt-12 border-t border-white/10 pt-8">
-                <button
-                  onClick={restartGame}
-                  className="w-full rounded-2xl bg-gradient-to-r from-[#ff4db8] to-[#ff2a85] px-4 py-5 text-xl font-bold text-white shadow-[0_0_30px_rgba(255,77,184,0.4)] transition-all hover:scale-[1.03] active:scale-[0.97]"
-                >
-                  새로운 게임 시작하기 (Restart)
-                </button>
-              </div>
-            </aside>
-          )}
-        </div>
+                      <div
+                        className={`text-4xl font-black tracking-tight text-cyan-400 ${isLatestScore ? 'drop-shadow-[0_0_10px_rgba(46,214,255,0.4)]' : ''
+                          }`}
+                      >
+                        {item.score}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="mt-12 border-t border-white/10 pt-8">
+              <button
+                onClick={restartGame}
+                className="w-full rounded-2xl bg-gradient-to-r from-[#ff4db8] to-[#ff2a85] px-4 py-5 text-xl font-bold text-white shadow-[0_0_30px_rgba(255,77,184,0.4)] transition-all hover:scale-[1.03] active:scale-[0.97]"
+              >
+                새로운 게임 시작하기 (Restart)
+              </button>
+            </div>
+          </aside>
+        )}
       </div>
     </main>
   );
