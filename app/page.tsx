@@ -23,6 +23,7 @@ type TrackedHand = {
   fingertip: { x: number; y: number };
 };
 
+
 const HAND_CONNECTIONS: Array<[number, number]> = [
   [0, 1], [1, 2], [2, 3], [3, 4],
   [0, 5], [5, 6], [6, 7], [7, 8],
@@ -94,10 +95,10 @@ export default function HandColorCatchGame() {
   const [misses, setMisses] = useState(0);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string>('');
-  
+
   const gameStateRef = useRef<'INPUT' | 'PLAYING' | 'GAME_OVER'>('INPUT');
   const [gameState, setGameState] = useState<'INPUT' | 'PLAYING' | 'GAME_OVER'>('INPUT');
-  
+
   const changeGameState = (newState: 'INPUT' | 'PLAYING' | 'GAME_OVER') => {
     gameStateRef.current = newState;
     setGameState(newState);
@@ -441,6 +442,11 @@ export default function HandColorCatchGame() {
     });
   };
 
+  const playerNameRef = useRef('');
+  useEffect(() => {
+    playerNameRef.current = playerName;
+  }, [playerName]);
+
   const drawHud = (ctx: CanvasRenderingContext2D, width: number) => {
     const hudWidth = 360;
     const hudHeight = 70;
@@ -514,13 +520,14 @@ export default function HandColorCatchGame() {
 
   const saveRanking = (finalScore: number) => {
     setRanking((prev) => {
-      const trimmedName = playerName.trim() || 'PLAYER';
+      const trimmedName = playerNameRef.current.trim() || 'PLAYER';
       const next = [
         { name: trimmedName.slice(0, 12), score: finalScore, date: new Date().toLocaleDateString() },
         ...prev,
       ]
         .sort((a, b) => b.score - a.score)
         .slice(0, 10);
+
       localStorage.setItem(RANKING_STORAGE_KEY, JSON.stringify(next));
       return next;
     });
@@ -545,7 +552,7 @@ export default function HandColorCatchGame() {
 
   return (
     <main className="min-h-screen bg-[#060b16] font-sans text-white selection:bg-[#ff4db8]/30">
-      
+
       {/* 1. INPUT Screen */}
       {gameState === 'INPUT' && (
         <div className="flex min-h-screen flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-[#060b16] to-[#060b16]">
@@ -560,7 +567,7 @@ export default function HandColorCatchGame() {
             <p className="mb-8 text-center text-sm font-medium text-white/50">
               게임에 쓸 닉네임을 적고 시작하세요.
             </p>
-            
+
             <input
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
@@ -571,7 +578,7 @@ export default function HandColorCatchGame() {
                 if (e.key === 'Enter') startGame();
               }}
             />
-            
+
             <button
               onClick={startGame}
               disabled={!playerName.trim()}
@@ -585,7 +592,7 @@ export default function HandColorCatchGame() {
 
       {/* 2. PLAYING or GAME_OVER UI wrapper */}
       <div className={`mx-auto max-w-6xl px-6 py-8 ${gameState === 'INPUT' ? 'hidden' : 'block'}`}>
-        
+
         {/* Header - hide on game over */}
         <div className={`mb-5 ${gameState === 'GAME_OVER' ? 'hidden' : 'block'}`}>
           <h1 className="text-2xl font-bold tracking-tight">Hand Color Catch Game</h1>
@@ -615,7 +622,7 @@ export default function HandColorCatchGame() {
 
         {/* Layout Grid container */}
         <div className={`grid gap-6 ${gameState === 'GAME_OVER' ? 'block' : 'lg:grid-cols-[minmax(0,1fr)_320px]'}`}>
-          
+
           {/* Main Camera Canvas */}
           <div className={`relative overflow-hidden rounded-[28px] border border-cyan-400/25 bg-black shadow-[0_0_40px_rgba(46,214,255,0.12)] ${gameState === 'GAME_OVER' ? 'hidden' : 'block'}`}>
             <video ref={videoRef} className="hidden" playsInline muted />
@@ -643,7 +650,7 @@ export default function HandColorCatchGame() {
 
           {/* Ranking Sidebar OR Game Over Final View */}
           <aside className={`flex flex-col rounded-[32px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl shadow-2xl transition-all duration-700 ${gameState === 'GAME_OVER' ? 'mx-auto mt-6 w-full max-w-2xl px-12 py-16 border-cyan-400/20 bg-[#0c1220]/80' : ''}`}>
-            
+
             {gameState === 'GAME_OVER' && (
               <div className="mb-12 text-center">
                 <h2 className="mb-4 text-7xl font-black italic tracking-tighter text-[#ff4db8] drop-shadow-[0_0_40px_rgba(255,77,184,0.5)]">
@@ -674,22 +681,21 @@ export default function HandColorCatchGame() {
               ) : (
                 ranking.map((item, index) => {
                   const isLatestScore = gameState === 'GAME_OVER' && index === 0 && item.score === scoreRef.current && item.name === playerName.trim();
-                  
+
                   return (
                     <div
                       key={`${item.name}-${item.score}-${item.date}-${index}`}
                       className={`flex items-center justify-between rounded-2xl border px-5 py-4 transition-all duration-300 ${isLatestScore
                         ? 'border-cyan-400/40 bg-cyan-900/30 shadow-[0_0_20px_rgba(46,214,255,0.2)] scale-[1.02]'
                         : 'border-white/5 bg-black/20 hover:border-white/10 hover:bg-black/30'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-4">
-                        <div className={`flex items-center justify-center rounded-full font-black ${
-                          index === 0 ? 'bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/50' : 
-                          index === 1 ? 'bg-slate-300/20 text-slate-300 ring-1 ring-slate-400/30' : 
-                          index === 2 ? 'bg-amber-700/20 text-amber-500 ring-1 ring-amber-700/50' : 
-                          'bg-white/5 text-white/40 font-bold'
-                        } ${gameState === 'GAME_OVER' ? 'h-10 w-10 text-lg' : 'h-8 w-8 text-sm'}`}>
+                        <div className={`flex items-center justify-center rounded-full font-black ${index === 0 ? 'bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/50' :
+                          index === 1 ? 'bg-slate-300/20 text-slate-300 ring-1 ring-slate-400/30' :
+                            index === 2 ? 'bg-amber-700/20 text-amber-500 ring-1 ring-amber-700/50' :
+                              'bg-white/5 text-white/40 font-bold'
+                          } ${gameState === 'GAME_OVER' ? 'h-10 w-10 text-lg' : 'h-8 w-8 text-sm'}`}>
                           {index + 1}
                         </div>
                         <div>
